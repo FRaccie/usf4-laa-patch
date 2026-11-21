@@ -1,0 +1,41 @@
+# A tag v1.2.3 builds LaaPatch.exe with the .NET Framework csc that ships with Windows, runs the self-test, and makes a
+# DRAFT release with LaaPatch.exe, laa-patch.ps1 and SHA256SUMS. Nothing is public until the draft is published by hand.
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: windows-2022
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build LaaPatch.exe
+        shell: cmd
+        run: app\build.cmd
+
+      - name: Self-test (synthetic PE; the SSFIV.exe comparison is skipped without the game)
+        shell: pwsh
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File test-laa-patch.ps1; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Draft release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          $out = New-Item -ItemType Directory dist
+          Copy-Item app\LaaPatch.exe, laa-patch.ps1 $out
+          Get-ChildItem $out | ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name } |
+            Set-Content dist\SHA256SUMS -Encoding ascii
+          gh release create "$env:TAG" dist\LaaPatch.exe dist\laa-patch.ps1 dist\SHA256SUMS --draft --verify-tag `
+            --title "USF4 LAA patch $env:TAG" --generate-notes
