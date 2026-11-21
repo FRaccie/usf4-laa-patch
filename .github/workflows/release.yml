@@ -35,7 +35,8 @@ jobs:
         run: |
           $out = New-Item -ItemType Directory dist
           Copy-Item app\LaaPatch.exe, laa-patch.ps1 $out
-          Get-ChildItem $out | ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name } |
-            Set-Content dist\SHA256SUMS -Encoding ascii
+          # LF line endings, so `sha256sum -c SHA256SUMS` works on Linux and the Steam Deck too.
+          $sums = Get-ChildItem $out | ForEach-Object { "{0}  {1}`n" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name }
+          [IO.File]::WriteAllText("$PWD\dist\SHA256SUMS", -join $sums)
           gh release create "$env:TAG" dist\LaaPatch.exe dist\laa-patch.ps1 dist\SHA256SUMS --draft --verify-tag `
             --title "USF4 LAA patch $env:TAG" --generate-notes
